@@ -1,0 +1,38 @@
+version: "3.8"
+
+# =====================================================================
+# 基础设施启动：PostgreSQL(pgvector) + Redis
+# 注意：本机已有 MySQL 跑在 3306，故这里不再起 MySQL 容器
+# 使用：docker compose up -d
+# Ollama 需单独安装（见 README）
+# =====================================================================
+services:
+
+  postgres:
+    image: pgvector/pgvector:pg16   # 自带 pgvector 扩展
+    container_name: rag-postgres
+    environment:
+      POSTGRES_DB: rag_vector
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rag_vector"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  pg_data:
+  redis_data:
