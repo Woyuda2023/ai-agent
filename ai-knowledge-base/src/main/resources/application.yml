@@ -7,65 +7,55 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 50MB
+      max-file-size: 10MB
+      max-request-size: 20MB
 
-  # ========== MySQL：业务元数据（文档记录、会话列表） ==========
+  # ========== MySQL：唯一数据库（文档元数据 / 向量 / 会话消息全部在此） ==========
+  # 使用本机 MySQL 8（root / 123456）；如需改用 Docker Compose 启动的 MySQL，密码同为 123456
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/rag_kb?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: root123
+    password: 123456
 
-  # 启动时自动执行建表 SQL（仅作用于 MySQL 主数据源）
+  # 启动时自动执行建表 SQL
   sql:
     init:
       mode: always
       schema-locations: classpath:sql/init.sql
       continue-on-error: false
 
-  # ========== Redis：多轮对话记录 ==========
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      database: 0
-      timeout: 3s
-
-  # ========== Ollama：对话大模型 + Embedding 模型 ==========
+  # ========== 在线大模型 API：智谱 BigModel（OpenAI 兼容，Key 通过环境变量注入） ==========
+  # 对话：POST https://open.bigmodel.cn/api/paas/v4/chat/completions
+  # 向量：POST https://open.bigmodel.cn/api/paas/v4/embeddings
   ai:
-    ollama:
-      base-url: http://localhost:11434
+    openai:
+      # 智谱 API Key（key.secret 格式），从环境变量 LLM_API_KEY 读取，启动前必须设置
+      api-key: ${LLM_API_KEY}
+      base-url: https://open.bigmodel.cn/api/paas/v4
       chat:
+        completions-path: /chat/completions
         options:
-          model: qwen2.5:7b        # 对话模型，需先 ollama pull qwen2.5:7b
+          model: glm-4.7-flash              # 对话模型：GLM-4.7-Flash（免费，200K 上下文）
           temperature: 0.7
       embedding:
+        base-url: https://open.bigmodel.cn/api/paas/v4
+        embeddings-path: /embeddings
         options:
-          model: bge-m3            # Embedding 模型，需先 ollama pull bge-m3（1024 维）
-
-# ========== PgVector：向量库（独立数据源，spring-ai 自动建表 vector_store） ==========
-pgvector:
-  datasource:
-    driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://localhost:5432/rag_vector
-    username: postgres
-    password: postgres
-  dimensions: 1024                # 必须与 embedding 模型输出维度一致（bge-m3=1024；nomic-embed-text=768）
+          model: embedding-3                # 智谱向量模型（支持 256~2048 维）
+          dimensions: 1024                  # 显式指定维度，必须与 rag.embedding-dimensions 一致
 
 # ========== RAG 业务参数 ==========
 rag:
   chunk-size: 500                 # 分片大小（字符）
   overlap-size: 50                # 相邻分片重叠长度（字符），缓解语义断裂
-  top-k: 10                       # 向量检索候选数
-  top-n: 5                        # Rerank 重排后保留的上下文数量
+  top-k: 10                       # 向量检索返回的候选片段数
   similarity-threshold: 0.3       # 余弦相似度阈值（低于该值的结果被过滤）
   upload-dir: ./uploads           # 文档本地存储目录
-  rerank:
-    enabled: true
-    model: bge-reranker-v2-m3     # 重排序模型，需先 ollama pull bge-reranker-v2-m3
+  max-file-size: 10485760         # 上传文件大小上限（字节，10MB，与 multipart 一致）
+  embedding-dimensions: 1024      # 向量维度（与通义 text-embedding-v3 输出一致）
   session:
-    max-messages: 20              # Redis 中单会话保留的最大消息条数（超限触发摘要压缩）
+    max-messages: 20              # 单会话保留的最大消息条数（超限触发摘要压缩）
     summary-threshold: 16         # 摘要压缩时保留的最近消息条数
 
 mybatis-plus:
